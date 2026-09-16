@@ -122,6 +122,85 @@ def launch(cmd: list[str], label: str, dry_run: bool) -> tuple[float, bool]:
     return elapsed, True
 
 
+# Measured peak allocation per training step, plus about 0.7 GB for each process's own
+# CUDA context. The five-step U-Net is the outlier at 8.7 GB and can only ever run alone.
+GPU_GB = {
+    ("latentB", 1): 1.2, ("latentB", 5): 2.3,
+    ("latentA", 1): 1.2, ("latentA", 5): 2.5,
+    ("unet", 1): 2.6, ("unet", 5): 9.4,
+}
+GPU_BUDGET_GB = 11.0
+
+# How often to reap finished jobs. Negligible against runs that last an hour.
+POLL_SECONDS = 5
+
+# Each concurrent job holds its own copy of the training frames in RAM.
+HOST_GB_PER_JOB = 3.4
+
+
+def estimate_gpu_gb(cfg: dict) -> float:
+    return GPU_GB.get((cfg["arch"], cfg["k_train"]), 3.0)
+
+
+def run_pool(jobs: list[dict], max_jobs: int, dry_run: bool) -> tuple[dict, list[str]]:
+    """Run training jobs concurrently, within a GPU memory budget.
+
+    These models are small enough that a single one leaves the card mostly idle -- it
+    spends much of its time launching kernels rather than executing them -- so several
+    train at close to full speed side by side. The budget is what stops that from turning
+    into an out-of-memory failure eleven hours in: jobs are admitted only while their
+    estimated peak allocations still fit, which naturally serialises the five-step U-Net.
+    """
+    timings: dict[str, float] = {}
+    failed: list[str] = []
+    pending = list(jobs)
+    running: list[dict] = []
+
+    while pending or running:
+        while pending:
+            candidate = pending[0]
+            used = sum(j["gpu_gb"] for j in running)
+            if running and (len(running) >= max_jobs
+                            or used + candidate["gpu_gb"] > GPU_BUDGET_GB):
+                break
+            pending.pop(0)
+            print(f"\n=== start {candidate['label']} "
+                  f"({candidate['gpu_gb']:.1f} GB, {len(running) + 1} running) ===", flush=True)
+            print("$ " + " ".join(candidate["cmd"]), flush=True)
+            if dry_run:
+                timings[candidate["label"]] = 0.0
+                continue
+            log = ROOT / "runs" / candidate["name"]
+            log.mkdir(parents=True, exist_ok=True)
+            handle = (log / "train_stdout.log").open("w")
+            candidate["proc"] = subprocess.Popen(
+                candidate["cmd"], cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT
+            )
+            candidate["handle"] = handle
+            candidate["started"] = time.perf_counter()
+            running.append(candidate)
+
+        if not running:
+            continue
+
+        time.sleep(POLL_SECONDS)
+        for job in list(running):
+            if job["proc"].poll() is None:
+                continue
+            running.remove(job)
+            job["handle"].close()
+            elapsed = time.perf_counter() - job["started"]
+            timings[job["label"]] = elapsed
+            ok = job["proc"].returncode == 0
+            status = "done" if ok else f"FAILED ({job['proc'].returncode})"
+            print(f"=== {status}: {job['label']} after {elapsed / 60:.1f} min ===", flush=True)
+            if not ok:
+                failed.append(job["label"])
+                print(f"    see runs/{job['name']}/train_stdout.log", flush=True)
+
+    return timings, failed
+
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -132,7 +211,14 @@ def main() -> None:
     parser.add_argument("--data-root", default="data/v1")
     parser.add_argument("--lr", type=float, default=3e-4,
                         help="learning rate for stages other than the probe")
+    parser.add_argument("--jobs", type=int, default=1,
+                        help="train this many runs concurrently, within the GPU budget")
     args = parser.parse_args()
+
+    if args.jobs > 1:
+        print(f"training up to {args.jobs} runs at once "
+              f"(GPU budget {GPU_BUDGET_GB:.0f} GB, ~{HOST_GB_PER_JOB:.1f} GB host RAM each)",
+              flush=True)
 
     python = sys.executable
     timings: dict[str, float] = {}
@@ -157,34 +243,54 @@ def main() -> None:
                             "--data-root", args.data_root], f"baseline {name}", args.dry_run)
             record(f"baseline {name}", ok)
 
+    def train_command(cfg: dict, stage: str) -> list[str]:
+        cmd = [python, "scripts/train.py", "--run-id", cfg["run_id"],
+               "--arch", cfg["arch"], "--latent-dim", str(cfg["latent_dim"]),
+               "--k-train", str(cfg["k_train"]), "--train-size", str(cfg["train_size"]),
+               "--seed", str(cfg["seed"]), "--loss", cfg["loss"],
+               "--lr", str(cfg.get("lr", args.lr)),
+               "--data-root", args.data_root]
+        cmd.append("--use-action" if cfg["use_action"] else "--no-use-action")
+        cmd.append("--uses-volume-loss" if cfg.get("uses_volume_loss")
+                   else "--no-uses-volume-loss")
+        epochs = args.epochs or (LR_PROBE_EPOCHS if stage == "lr" else None)
+        if epochs:
+            cmd += ["--epochs", str(epochs)]
+        return cmd
+
     for stage in args.stage:
         if stage == "baselines":
             continue
+
+        pending, trained = [], []
         for cfg in STAGES[stage]:
             name = cfg["run_id"]
             if args.skip_existing and (ROOT / "runs" / name / "ckpt_best.pt").exists():
                 print(f"\n=== {name}: already trained, skipping ===", flush=True)
-            else:
-                cmd = [python, "scripts/train.py", "--run-id", name,
-                       "--arch", cfg["arch"], "--latent-dim", str(cfg["latent_dim"]),
-                       "--k-train", str(cfg["k_train"]), "--train-size", str(cfg["train_size"]),
-                       "--seed", str(cfg["seed"]), "--loss", cfg["loss"],
-                       "--lr", str(cfg.get("lr", args.lr)),
-                       "--data-root", args.data_root]
-                cmd.append("--use-action" if cfg["use_action"] else "--no-use-action")
-                cmd.append("--uses-volume-loss" if cfg.get("uses_volume_loss")
-                           else "--no-uses-volume-loss")
-                epochs = args.epochs or (LR_PROBE_EPOCHS if stage == "lr" else None)
-                if epochs:
-                    cmd += ["--epochs", str(epochs)]
-                timings[name], ok = launch(cmd, f"train {name}", args.dry_run)
-                record(f"train {name}", ok)
-                if not ok:
-                    continue
+                trained.append(name)
+                continue
+            pending.append({"name": name, "label": f"train {name}",
+                            "cmd": train_command(cfg, stage),
+                            "gpu_gb": estimate_gpu_gb(cfg)})
 
-            # Probes are compared on dev five-step error alone; there is nothing to
-            # learn from evaluating a deliberately under-trained model on held-out splits.
-            if stage != "lr":
+        if args.jobs > 1 and pending:
+            pool_timings, pool_failed = run_pool(pending, args.jobs, args.dry_run)
+            timings.update(pool_timings)
+            failed.extend(pool_failed)
+            trained += [j["name"] for j in pending if j["label"] not in pool_failed]
+        else:
+            for job in pending:
+                timings[job["name"]], ok = launch(job["cmd"], job["label"], args.dry_run)
+                record(job["label"], ok)
+                if ok:
+                    trained.append(job["name"])
+
+        # Evaluation stays serial: it is a small share of the wall clock and holds a
+        # whole split of frames plus its predictions in host memory.
+        # Probes are compared on dev five-step error alone, so there is nothing to learn
+        # from evaluating a deliberately under-trained model on held-out splits.
+        if stage != "lr":
+            for name in trained:
                 _, ok = launch([python, "scripts/evaluate.py", "--run-id", name,
                                 "--data-root", args.data_root], f"evaluate {name}", args.dry_run)
                 record(f"evaluate {name}", ok)
