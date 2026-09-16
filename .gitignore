@@ -1,22 +1,25 @@
-# data and experiment outputs
-data/
-runs/
-results/
+# data and experiment outputs. Anchored with a leading slash: a bare "data/" matches any
+# directory of that name at any depth, which silently excluded the whole src/wm/data
+# package from the repository.
+/data/
+/runs/
 *.npy
 *.npz
 *.pt
 *.ckpt
 
-# ...but the summary figures and tables are the deliverable, so they are tracked
-!results/
-results/*
-!results/figures/
-!results/figures/*.png
-!results/tables/
-!results/tables/*.csv
-!results/index.csv
-!results/lr_probe.json
-!results/run_timings.json
+# Experiment outputs are ignored, except the summary figures and tables, which are the
+# deliverable and are tracked.
+/results/*
+!/results/figures/
+/results/figures/*
+!/results/figures/*.png
+!/results/tables/
+/results/tables/*
+!/results/tables/*.csv
+!/results/index.csv
+!/results/lr_probe.json
+!/results/run_timings.json
 
 # python
 __pycache__/
