@@ -156,11 +156,19 @@ def estimate_gpu_gb(cfg: dict) -> float:
 def run_pool(jobs: list[dict], max_jobs: int, dry_run: bool) -> tuple[dict, list[str], list[str]]:
     """Run training jobs concurrently, within a GPU memory budget.
 
-    These models are small enough that a single one leaves the card mostly idle -- it
-    spends much of its time launching kernels rather than executing them -- so several
-    train at close to full speed side by side. The budget is what stops that from turning
-    into an out-of-memory failure eleven hours in: jobs are admitted only while their
-    estimated peak allocations still fit, which naturally serialises the five-step U-Net.
+    Kept because the GPU memory accounting is useful, but measured on real training
+    concurrency is a LOSS, not a win, and --jobs 1 is the right default.
+
+    A synthetic benchmark with the data already resident on the GPU said two jobs gave
+    1.58x the aggregate throughput. Real training disagreed sharply: a five-step latent
+    run took 42 s per epoch alone and 275 s per epoch sharing the machine with one other,
+    so two jobs together managed 0.0095 epochs per second against 0.024 running one at a
+    time -- two and a half times worse.
+
+    The benchmark was measuring the wrong thing. It skipped the data path, and the data
+    path is where the contention lives: every batch is assembled by a Python-side gather
+    of thirty-two windows out of a multi-gigabyte in-memory array, and two of those
+    thrash the CPU against each other. The GPU was never the bottleneck.
     """
     timings: dict[str, float] = {}
     failed: list[str] = []
@@ -241,7 +249,7 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=3e-4,
                         help="learning rate for stages other than the probe")
     parser.add_argument("--jobs", type=int, default=1,
-                        help="train this many runs concurrently, within the GPU budget")
+                        help="concurrent training runs; measured slower than 1, see run_pool")
     parser.add_argument("--log-file", default=None,
                         help="write progress here, opened by this process (see wm.runlog)")
     args = parser.parse_args()

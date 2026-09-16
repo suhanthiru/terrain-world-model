@@ -22,3 +22,8 @@ $ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Py
 
 === start train latentA_K5_z64_n2000_s0 (2.5 GB, 2 running) ===
 $ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentA_K5_z64_n2000_s0 --arch latentA --latent-dim 64 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+=== done: train latentA_K5_z64_n2000_s0 after 23.1 min ===
+=== done: train latentB_K5_z64_n2000_s0 after 36.0 min ===
+
+=== start train unet_K5_n2000_s0 (9.4 GB, 1 running) ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id unet_K5_n2000_s0 --arch unet --latent-dim 64 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
