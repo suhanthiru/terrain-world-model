@@ -17,10 +17,15 @@ import numpy as np
 
 AUDIT_HORIZONS = (20, 50)
 
+# Predicting no change scores exactly -(swell - 1) = -25% on the volume metric, so a
+# collapse threshold placed at -25% has the identity baseline sitting on the boundary and
+# straddling it on floating-point noise alone. Calibrated on dev against the baselines, it
+# goes just beyond: a model has to lose meaningfully more material than doing nothing
+# would before it is called a collapse.
 THRESHOLDS = {
     "diverged_height_m": 10.0,
     "volume_explosion": 0.25,
-    "volume_collapse": -0.25,
+    "volume_collapse": -0.30,
     "checkerboard_score": 3.0,
     "sign_alternation": 0.85,
     "identity_activity": 0.15,
