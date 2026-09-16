@@ -149,13 +149,19 @@ def launch(cmd: list[str], label: str, dry_run: bool,
 
 
 # Measured peak allocation per training step, plus about 0.7 GB for each process's own
-# CUDA context. The five-step U-Net is the outlier at 8.7 GB and can only ever run alone.
+# CUDA context. The five-step U-Net was the outlier at 8.7 GB until gradient
+# checkpointing brought it to 3.5.
 GPU_GB = {
     ("latentB", 1): 1.2, ("latentB", 5): 2.3,
     ("latentA", 1): 1.2, ("latentA", 5): 2.5,
-    ("unet", 1): 2.6, ("unet", 5): 9.4,
+    ("unet", 1): 2.6, ("unet", 5): 4.2,
 }
-GPU_BUDGET_GB = 11.0
+
+# Not the card's 12 GB. This is a shared desktop: an Ollama server and a dozen browser
+# and Electron GPU processes held 8.5 GB with no training running at all, leaving under
+# 4 GB. Budgeting for the whole card is how a run ends up thrashing the allocator for an
+# hour instead of failing fast, which is far harder to notice.
+GPU_BUDGET_GB = 3.6
 
 # How often to reap finished jobs. Negligible against runs that last an hour.
 POLL_SECONDS = 5

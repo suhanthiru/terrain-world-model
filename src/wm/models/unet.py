@@ -24,6 +24,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from wm.data.normalize import DELTA_SCALE, HEIGHT_SCALE
 
@@ -33,6 +34,17 @@ ACTION_EMBED = 64
 
 # Chosen to land within a percent of the latent model's parameter count.
 DEFAULT_WIDTHS = (26, 40, 55, 82, 110)
+
+# Recompute block activations in the backward pass instead of storing them. This is the
+# same arithmetic for perhaps thirty percent more compute, and it takes a five-step
+# unrolled U-Net from about 8.7 GB down to a couple of GB.
+#
+# It is on by default because this is not a dedicated machine. Sharing the card with an
+# Ollama server and a dozen browser GPU processes left roughly 11 of 12 GB spoken for,
+# and the resulting allocator thrash slowed an epoch from 195 s to over 50 minutes. A
+# smaller batch would also have fixed it, but batch size is held at 32 across every run
+# so it cannot confound the comparison; recomputation costs only time.
+GRADIENT_CHECKPOINTING = True
 
 
 class FiLMPair(nn.Module):
@@ -45,9 +57,16 @@ class FiLMPair(nn.Module):
         self.second = ConvBlock(out_ch, out_ch)
         self.film_second = FiLM(embed_dim, out_ch)
 
-    def forward(self, x: torch.Tensor, embed: torch.Tensor) -> torch.Tensor:
+    def _conv_pair(self, x: torch.Tensor, embed: torch.Tensor) -> torch.Tensor:
+        # Deliberately not named _apply: nn.Module already owns that name and uses it
+        # for .cuda() and .to().
         x = self.film_first(self.first(x), embed)
         return self.film_second(self.second(x), embed)
+
+    def forward(self, x: torch.Tensor, embed: torch.Tensor) -> torch.Tensor:
+        if GRADIENT_CHECKPOINTING and self.training and torch.is_grad_enabled():
+            return checkpoint(self._conv_pair, x, embed, use_reentrant=False)
+        return self._conv_pair(x, embed)
 
 
 class UNetWorldModel(nn.Module):
