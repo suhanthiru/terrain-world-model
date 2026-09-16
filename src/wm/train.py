@@ -77,6 +77,22 @@ class RunConfig:
                 k = value
         return min(k, self.k_train)
 
+    def curriculum_complete_epoch(self) -> int:
+        """First epoch at which the rollout horizon reaches its target.
+
+        Early stopping must not fire before this. The horizon ramps over the first seven
+        epochs while the dev metric is measured at the full horizon throughout, so
+        improvement can legitimately stall during the ramp -- and with a patience of five
+        the run would stop at epoch five, having never once trained at the horizon it is
+        meant to be learning.
+        """
+        if self.k_train == 1:
+            return 0
+        for start, value in self.curriculum:
+            if min(value, self.k_train) >= self.k_train:
+                return start
+        return 0
+
     def teacher_prob(self, epoch: int) -> float:
         if self.teacher_forcing_epochs <= 0:
             return 0.0
@@ -307,7 +323,8 @@ class Trainer:
                 torch.save({"model": self.model.state_dict(), "epoch": epoch,
                             "dev_loss": best, "config": asdict(self.cfg)},
                            self.out_dir / "ckpt_best.pt")
-            elif epoch - best_epoch >= self.cfg.early_stop_patience:
+            elif (epoch >= self.cfg.curriculum_complete_epoch() + self.cfg.early_stop_patience
+                  and epoch - best_epoch >= self.cfg.early_stop_patience):
                 print(f"  early stop: no improvement since epoch {best_epoch}", flush=True)
                 break
 

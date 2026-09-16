@@ -148,3 +148,15 @@ def test_window_offset_leaves_frame_to_frame_change_untouched():
     shifted = frames - offset[:, None, None, None]
     assert np.allclose(np.diff(frames, axis=1), np.diff(shifted, axis=1))
     assert np.allclose(shifted[:, 0].mean(axis=(1, 2)), 0.0, atol=1e-12)
+
+
+def test_early_stopping_cannot_fire_before_the_curriculum_finishes():
+    """Otherwise a five-step run stops before ever training at five steps."""
+    cfg = RunConfig(run_id="x", k_train=5, early_stop_patience=5)
+    assert cfg.curriculum_complete_epoch() == 7
+    # The horizon is still ramping through epoch 6, so stopping must not be possible
+    # until well past it.
+    assert cfg.curriculum_complete_epoch() + cfg.early_stop_patience == 12
+
+    assert RunConfig(run_id="x", k_train=1).curriculum_complete_epoch() == 0
+    assert RunConfig(run_id="x", k_train=3).curriculum_complete_epoch() == 5
