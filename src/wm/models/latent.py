@@ -27,7 +27,7 @@ import torch.nn as nn
 
 from wm.data.normalize import DELTA_SCALE, HEIGHT_SCALE
 
-from .blocks import ActionEncoder, ConvBlock, CoordChannels, DownBlock, UpBlock, group_norm, zero_init
+from .blocks import ActionEncoder, ConvBlock, CoordChannels, DownBlock, UpBlock, group_norm, near_zero_init
 
 ENCODER_WIDTHS = (24, 48, 64, 96, 128)
 DECODER_WIDTHS = (128, 96, 64, 48, 24)
@@ -68,7 +68,7 @@ class Decoder(nn.Module):
             in_ch = out_ch
         ups.append(UpBlock(in_ch, in_ch))
         self.up = nn.Sequential(*ups)
-        self.out = zero_init(nn.Conv2d(in_ch, 1, 3, padding=1))
+        self.out = near_zero_init(nn.Conv2d(in_ch, 1, 3, padding=1))
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         h = self.from_latent(z).view(-1, BOTTLENECK_CH, BOTTLENECK_HW, BOTTLENECK_HW)
@@ -115,6 +115,8 @@ class LatentWorldModel(nn.Module):
         actions: torch.Tensor,
         *,
         protocol: str | None = None,
+        teacher_frames: torch.Tensor | None = None,
+        teacher_prob: float = 0.0,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Predict K future surfaces from a start surface and K actions.
 
@@ -144,9 +146,18 @@ class LatentWorldModel(nn.Module):
             # scale on top of metre-scale heights, which is exactly where reduced
             # precision would quietly destroy it.
             delta = self.decoder(z).float() * DELTA_SCALE
-            current = current.float() + delta
-            frames.append(current)
+            predicted = current.float() + delta
+            frames.append(predicted)
             norms.append(hidden.detach().norm(dim=-1))
+
+            # Scheduled sampling, and only meaningful under protocol A: under B the
+            # model never re-reads a surface, so there is nothing to substitute.
+            current = predicted
+            if protocol == "A" and teacher_frames is not None and teacher_prob > 0.0:
+                use_truth = torch.rand(predicted.shape[0], device=predicted.device) < teacher_prob
+                current = torch.where(
+                    use_truth[:, None, None], teacher_frames[:, step], predicted
+                )
 
         return torch.stack(frames, dim=1), torch.stack(norms, dim=1)
 

@@ -24,7 +24,7 @@ class IdentityModel(nn.Module):
     protocol = "A"
     use_action = False
 
-    def rollout(self, x0, actions, *, protocol=None):
+    def rollout(self, x0, actions, *, protocol=None, teacher_frames=None, teacher_prob=0.0):
         k = actions.shape[1]
         frames = x0.unsqueeze(1).expand(-1, k, -1, -1).clone()
         return frames, torch.zeros(x0.shape[0], k, device=x0.device)
@@ -43,7 +43,7 @@ class MeanTerrainModel(nn.Module):
     protocol = "A"
     use_action = False
 
-    def rollout(self, x0, actions, *, protocol=None):
+    def rollout(self, x0, actions, *, protocol=None, teacher_frames=None, teacher_prob=0.0):
         k = actions.shape[1]
         flat = x0.mean(dim=(1, 2))[:, None, None, None].expand(-1, k, x0.shape[1], x0.shape[2])
         return flat.clone(), torch.zeros(x0.shape[0], k, device=x0.device)

@@ -27,7 +27,7 @@ import torch.nn.functional as F
 
 from wm.data.normalize import DELTA_SCALE, HEIGHT_SCALE
 
-from .blocks import ActionEncoder, ConvBlock, CoordChannels, FiLM, UpBlock, zero_init
+from .blocks import ActionEncoder, ConvBlock, CoordChannels, FiLM, UpBlock, near_zero_init
 
 ACTION_EMBED = 64
 
@@ -80,7 +80,7 @@ class UNetWorldModel(nn.Module):
         self.dec2 = FiLMPair(2 * w1, w1, ACTION_EMBED)
         self.up1 = UpBlock(w1, w0)
         self.dec1 = FiLMPair(2 * w0, w0, ACTION_EMBED)
-        self.out = zero_init(nn.Conv2d(w0, 1, 1))
+        self.out = near_zero_init(nn.Conv2d(w0, 1, 1))
 
     def predict_delta(self, x: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         if not self.use_action:
@@ -106,13 +106,22 @@ class UNetWorldModel(nn.Module):
         actions: torch.Tensor,
         *,
         protocol: str | None = None,
+        teacher_frames: torch.Tensor | None = None,
+        teacher_prob: float = 0.0,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         current = x0
         frames = []
         for step in range(actions.shape[1]):
             delta = self.predict_delta(current, actions[:, step]).float() * DELTA_SCALE
-            current = current.float() + delta
-            frames.append(current)
+            predicted = current.float() + delta
+            frames.append(predicted)
+
+            current = predicted
+            if teacher_frames is not None and teacher_prob > 0.0:
+                use_truth = torch.rand(predicted.shape[0], device=predicted.device) < teacher_prob
+                current = torch.where(
+                    use_truth[:, None, None], teacher_frames[:, step], predicted
+                )
         # No recurrent state to report; returned for a uniform interface with the latent model.
         empty = torch.zeros(x0.shape[0], actions.shape[1], device=x0.device)
         return torch.stack(frames, dim=1), empty
