@@ -278,6 +278,13 @@ def main() -> None:
             timings.update(pool_timings)
             failed.extend(pool_failed)
             trained += [j["name"] for j in pending if j["label"] not in pool_failed]
+            # The consecutive-failure rule does not apply to jobs that ran side by side,
+            # so apply the equivalent check: several failing and none succeeding is
+            # systematic, and there is nothing to gain from starting the next stage.
+            if len(pool_failed) >= CONSECUTIVE_FAILURE_LIMIT and len(pool_failed) == len(pending):
+                raise SystemExit(
+                    f"stopping: every job in stage {stage!r} failed ({len(pool_failed)} of them)"
+                )
         else:
             for job in pending:
                 timings[job["name"]], ok = launch(job["cmd"], job["label"], args.dry_run)
