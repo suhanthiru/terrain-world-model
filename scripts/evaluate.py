@@ -87,9 +87,14 @@ def evaluate_split(model, store: EpisodeStore, swell: float, device: str,
     return pd.DataFrame(rows), failures
 
 
-def summarise_split(frame: pd.DataFrame) -> dict:
+def summarise_split(frame: pd.DataFrame, horizons=None) -> dict:
+    """Aggregate every metric at each horizon.
+
+    Written out for all fifty steps so the figures can draw a curve rather than five
+    points; index.csv keeps only the tabulated horizons so it stays small.
+    """
     out = {}
-    for horizon in REPORT_HORIZONS:
+    for horizon in horizons if horizons is not None else REPORT_HORIZONS:
         at = frame[frame["horizon"] == horizon]
         if at.empty:
             continue
@@ -133,8 +138,11 @@ def main() -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
         frame.to_parquet(out_dir / "per_episode.parquet", index=False)
 
+        all_horizons = sorted(frame["horizon"].unique())
+        (out_dir / "summary.json").write_text(
+            json.dumps(summarise_split(frame, all_horizons), indent=2)
+        )
         summary = summarise_split(frame)
-        (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
         (out_dir / "failures.json").write_text(json.dumps({
             "thresholds_frozen_on": "dev, baseline models only",
             "by_horizon": {

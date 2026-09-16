@@ -40,23 +40,42 @@ def mark_training_horizon(ax) -> None:
                 rotation=90, fontsize=7, color="0.4", ha="right", va="bottom")
 
 
+def load_curves(runs_dir: Path, split: str) -> dict[str, dict]:
+    """Full per-horizon curves from each run's summary.json.
+
+    Still only reading files the evaluation wrote -- no checkpoint is loaded and torch is
+    never imported, so figures regenerate in seconds without a GPU.
+    """
+    curves = {}
+    for path in sorted(runs_dir.glob(f"*/eval/{split}/summary.json")):
+        curves[path.parents[2].name] = json.loads(path.read_text())
+    return curves
+
+
+def curve(curves: dict, run: str, metric: str, stat: str = "median"):
+    entry = curves.get(run, {})
+    horizons = sorted(int(k) for k in entry)
+    values = [entry[str(k)].get(metric, {}).get(stat, np.nan) for k in horizons]
+    return np.array(horizons), np.array(values, dtype=float)
+
+
 def series(frame: pd.DataFrame, run: str, split: str, column: str):
     at = frame[(frame["run_id"] == run) & (frame["eval_split"] == split)].sort_values("horizon")
     return at["horizon"].to_numpy(), at[column].to_numpy()
 
 
-def horizon_curves(frame: pd.DataFrame, split: str, out: Path) -> None:
+def horizon_curves(curves: dict, split: str, out: Path) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(9.5, 3.8))
-    runs = [r for r in frame["run_id"].unique() if r not in BASELINES]
+    runs = [r for r in curves if r not in BASELINES]
 
-    for ax, (column, label) in zip(axes, [("mae_median", "all cells"),
-                                          ("masked_mae_median", "cells that moved")]):
+    for ax, (metric, label) in zip(axes, [("mae", "all cells"),
+                                          ("masked_mae", "cells that moved")]):
         for run in runs:
-            k, value = series(frame, run, split, column)
+            k, value = curve(curves, run, metric)
             if len(k):
                 ax.plot(k, value * 1000, lw=1.4, label=run)
         for name, style in zip(BASELINES, ["--", ":"]):
-            k, value = series(frame, name, split, column)
+            k, value = curve(curves, name, metric)
             if len(k):
                 ax.plot(k, value * 1000, style, color="0.3", lw=1.2, label=name)
         ax.set_yscale("log")
@@ -72,16 +91,16 @@ def horizon_curves(frame: pd.DataFrame, split: str, out: Path) -> None:
     plt.close(fig)
 
 
-def volume_figure(frame: pd.DataFrame, split: str, out: Path) -> None:
+def volume_figure(curves: dict, split: str, out: Path) -> None:
     """The headline. Signed, so hallucinated material reads positive."""
     fig, ax = plt.subplots(figsize=(6.2, 4.0))
-    for run in [r for r in frame["run_id"].unique() if r not in BASELINES]:
-        k, median = series(frame, run, split, "eps_net_median")
+    for run in [r for r in curves if r not in BASELINES]:
+        k, median = curve(curves, run, "eps_net")
         if not len(k):
             continue
         line, = ax.plot(k, median * 100, lw=1.6, label=run)
-        _, low = series(frame, run, split, "eps_net_p10")
-        _, high = series(frame, run, split, "eps_net_p90")
+        _, low = curve(curves, run, "eps_net", "p10")
+        _, high = curve(curves, run, "eps_net", "p90")
         if len(low) == len(k):
             ax.fill_between(k, low * 100, high * 100, alpha=0.12, color=line.get_color())
 
@@ -236,8 +255,9 @@ def main() -> None:
     out = args.results / "figures"
     out.mkdir(parents=True, exist_ok=True)
 
-    horizon_curves(frame, args.split, out)
-    volume_figure(frame, args.split, out)
+    curves = load_curves(args.runs, args.split)
+    horizon_curves(curves, args.split, out)
+    volume_figure(curves, args.split, out)
     accuracy_versus_physics(frame, args.split, out)
     sweep_figure(frame, args.split, out)
     transfer_figure(frame, out)
