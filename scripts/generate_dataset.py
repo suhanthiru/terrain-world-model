@@ -43,6 +43,14 @@ def git_sha() -> str:
         return "unknown"
 
 
+SHARD_FILES = ("heights.npy", "actions.npy", "volumes.npz", "meta.json")
+
+
+def shard_is_complete(path: Path) -> bool:
+    """A shard counts only when every file is present -- heights are written first."""
+    return path.is_dir() and all((path / f).exists() for f in SHARD_FILES)
+
+
 def generate_split(name: str, root: Path, workers: int, limit: int | None) -> dict:
     spec = SPLITS[name]
     plan = spec.episode_plan()
@@ -53,12 +61,28 @@ def generate_split(name: str, root: Path, workers: int, limit: int | None) -> di
     shards: list[dict] = []
     started = time.perf_counter()
     done = 0
+    resumed = 0
 
     with mp.Pool(processes=workers) as pool:
         for shard_id, begin in enumerate(range(0, len(plan), per_shard)):
             chunk = plan[begin:begin + per_shard]
+            shard_path = root / "shards" / f"{name}_{shard_id:03d}"
+
+            # Resume: finished shards are kept, a half-written one is discarded and
+            # redone. Episodes are deterministic in their seed, so a shard rebuilt now
+            # is identical to the one that would have been written before the crash.
+            if shard_is_complete(shard_path):
+                shards.append({"name": shard_path.name, "n_episodes": len(chunk)})
+                done += len(chunk)
+                resumed += len(chunk)
+                print(f"  {name}: {shard_path.name} already complete, skipping", flush=True)
+                continue
+            if shard_path.exists():
+                for stale in shard_path.iterdir():
+                    stale.unlink()
+
             writer = ShardWriter(
-                path=root / "shards" / f"{name}_{shard_id:03d}",
+                path=shard_path,
                 n_episodes=len(chunk),
                 n_steps=N_STEPS,
                 grid_shape=DEFAULT_GRID.shape,
@@ -69,7 +93,7 @@ def generate_split(name: str, root: Path, workers: int, limit: int | None) -> di
                 writer.add(result["frames"], result["actions"], result["volumes"], result["meta"])
                 done += 1
                 if done % 25 == 0 or done == len(plan):
-                    rate = done / (time.perf_counter() - started)
+                    rate = (done - resumed) / max(time.perf_counter() - started, 1e-9)
                     remaining = (len(plan) - done) / max(rate, 1e-9)
                     print(f"  {name}: {done}/{len(plan)} episodes "
                           f"({rate * 60:.1f}/min, ~{remaining / 60:.1f} min left)", flush=True)
