@@ -31,13 +31,15 @@ def run_id(**kw) -> str:
         parts.append("noact")
     if kw.get("loss", "huber") != "huber":
         parts.append(kw["loss"])
+    if kw.get("uses_volume_loss"):
+        parts.append("volloss")
     parts += [f"n{kw['train_size']}", f"s{kw['seed']}"]
     return "_".join(parts)
 
 
 def spec(**kw) -> dict:
     base = dict(arch="latentB", latent_dim=64, k_train=5, train_size=2000,
-                seed=0, use_action=True, loss="huber")
+                seed=0, use_action=True, loss="huber", uses_volume_loss=False)
     base.update(kw)
     return {"run_id": run_id(**base), **base}
 
@@ -71,6 +73,10 @@ SEEDS = [
 EXTRA = [
     spec(arch="unet", k_train=5, use_action=False),   # is the action result architecture-specific?
     spec(loss="l1"),                                  # reproduce the identity collapse
+    # Quarantined: optimises the conservation residual directly, so its volume number is
+    # not evidence about the headline claim. The interesting question it answers is
+    # whether forcing volume to balance also fixes the repose violations.
+    spec(uses_volume_loss=True),
 ]
 
 # Short probes to pick a learning rate per architecture. Comparing a proposed model at
@@ -140,6 +146,8 @@ def main() -> None:
                        "--lr", str(cfg.get("lr", args.lr)),
                        "--data-root", args.data_root]
                 cmd.append("--use-action" if cfg["use_action"] else "--no-use-action")
+                cmd.append("--uses-volume-loss" if cfg.get("uses_volume_loss")
+                           else "--no-uses-volume-loss")
                 epochs = args.epochs or (LR_PROBE_EPOCHS if stage == "lr" else None)
                 if epochs:
                     cmd += ["--epochs", str(epochs)]

@@ -62,8 +62,11 @@ class RunConfig:
     teacher_forcing_epochs: int = 10
 
     loss: str = "huber"
-    early_stop_patience: int = 5
+    # See volume_penalty(): quarantined, and never on for a run whose volume number is
+    # reported as a headline result.
     uses_volume_loss: bool = False
+    volume_loss_weight: float = 0.3
+    early_stop_patience: int = 5
 
     def curriculum_k(self, epoch: int) -> int:
         if self.k_train == 1:
@@ -128,6 +131,24 @@ def rollout_loss(
 def rollout_mae(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """Absolute error in delta-scale units. The reported quantity, never the objective."""
     return ((pred - target) / DELTA_SCALE).abs().mean()
+
+
+def volume_penalty(pred: torch.Tensor, target: torch.Tensor, start: torch.Tensor) -> torch.Tensor:
+    """How far the predicted change in total material is from the true change.
+
+    QUARANTINED. This must not appear in the objective of any run whose volume error is
+    reported as a headline number. The claim under test is that a generically trained
+    world model violates mass conservation; optimising the conservation residual directly
+    reduces that claim to "we optimised X and X is low", which is the first thing a
+    reader would object to.
+
+    It exists so the question can be asked separately and honestly -- does forcing volume
+    to balance also fix the angle-of-repose violations? -- and make_tables.py refuses to
+    put runs with and without it in the same table.
+    """
+    pred_change = (pred - start.unsqueeze(1)).mean(dim=(2, 3))
+    true_change = (target - start.unsqueeze(1)).mean(dim=(2, 3))
+    return ((pred_change - true_change) / DELTA_SCALE).abs().mean()
 
 
 @torch.no_grad()
@@ -220,8 +241,10 @@ class Trainer:
                 group["lr"] = lr
 
             batch = self.train_sampler.sample()
-            _, target, pred, _ = self._forward(batch, k, teacher_prob)
+            start, target, pred, _ = self._forward(batch, k, teacher_prob)
             loss, _ = rollout_loss(pred, target, self.cfg.loss)
+            if self.cfg.uses_volume_loss:
+                loss = loss + self.cfg.volume_loss_weight * volume_penalty(pred, target, start)
 
             self.optimizer.zero_grad(set_to_none=True)
             loss.backward()
