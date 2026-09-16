@@ -49,6 +49,11 @@ def classify(scores: dict, pred: np.ndarray, horizon: int) -> dict:
     finite = bool(np.isfinite(pred[: k + 1]).all())
 
     def at(name):
+        """A metric at the audit horizon, or NaN.
+
+        Every comparison against NaN is False, so an episode whose statistic could not be
+        computed simply goes unflagged rather than being guessed at.
+        """
         value = scores[name][k]
         return float(value) if np.isfinite(value) else np.nan
 
@@ -68,8 +73,7 @@ def classify(scores: dict, pred: np.ndarray, horizon: int) -> dict:
         "spatial_displacement": (at("centroid_shift") > THRESHOLDS["displacement_cells"]
                                  and at("shift_corrected_ncc") > THRESHOLDS["displacement_ncc"]),
     }
-    flags = {name: bool(value) if np.isfinite(value if isinstance(value, float) else 0) else False
-             for name, value in flags.items()}
+    flags = {name: bool(value) for name, value in flags.items()}
 
     label = next((name for name in PRECEDENCE if flags[name]), "ok")
     return {
