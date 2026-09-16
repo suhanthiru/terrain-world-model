@@ -125,11 +125,26 @@ def main() -> None:
 
     python = sys.executable
     timings: dict[str, float] = {}
+    failed: list[str] = []
+    consecutive = 0
+
+    def record(label: str, ok: bool) -> None:
+        nonlocal consecutive
+        if ok:
+            consecutive = 0
+            return
+        failed.append(label)
+        consecutive += 1
+        if consecutive >= CONSECUTIVE_FAILURE_LIMIT:
+            raise SystemExit(
+                f"stopping: {consecutive} jobs failed in a row, most recently {label}"
+            )
 
     if "baselines" in args.stage:
         for name in BASELINES:
-            launch([python, "scripts/evaluate.py", "--run-id", name, "--arch", name,
-                    "--data-root", args.data_root], f"baseline {name}", args.dry_run)
+            _, ok = launch([python, "scripts/evaluate.py", "--run-id", name, "--arch", name,
+                            "--data-root", args.data_root], f"baseline {name}", args.dry_run)
+            record(f"baseline {name}", ok)
 
     for stage in args.stage:
         if stage == "baselines":
@@ -151,13 +166,17 @@ def main() -> None:
                 epochs = args.epochs or (LR_PROBE_EPOCHS if stage == "lr" else None)
                 if epochs:
                     cmd += ["--epochs", str(epochs)]
-                timings[name] = launch(cmd, f"train {name}", args.dry_run)
+                timings[name], ok = launch(cmd, f"train {name}", args.dry_run)
+                record(f"train {name}", ok)
+                if not ok:
+                    continue
 
             # Probes are compared on dev five-step error alone; there is nothing to
             # learn from evaluating a deliberately under-trained model on held-out splits.
             if stage != "lr":
-                launch([python, "scripts/evaluate.py", "--run-id", name,
-                        "--data-root", args.data_root], f"evaluate {name}", args.dry_run)
+                _, ok = launch([python, "scripts/evaluate.py", "--run-id", name,
+                                "--data-root", args.data_root], f"evaluate {name}", args.dry_run)
+                record(f"evaluate {name}", ok)
 
     if timings and not args.dry_run:
         path = ROOT / "results" / "run_timings.json"
