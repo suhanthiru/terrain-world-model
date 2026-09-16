@@ -7,6 +7,17 @@ results/
 *.pt
 *.ckpt
 
+# ...but the summary figures and tables are the deliverable, so they are tracked
+!results/
+results/*
+!results/figures/
+!results/figures/*.png
+!results/tables/
+!results/tables/*.csv
+!results/index.csv
+!results/lr_probe.json
+!results/run_timings.json
+
 # python
 __pycache__/
 *.py[cod]
