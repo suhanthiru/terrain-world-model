@@ -45,7 +45,7 @@ ARRAY_METRICS = (
     "mae", "rmse", "max_ae", "masked_mae", "eps_net", "dv_pred", "dv_true",
     "repose_violation", "repose_violation_true", "hf_ratio", "checkerboard",
     "sign_alternation", "activity_ratio", "centroid_shift", "shift_corrected_ncc",
-    "effective_swell", "displaced_error",
+    "effective_swell", "effective_swell_true", "displaced_error",
 )
 
 

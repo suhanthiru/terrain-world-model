@@ -73,6 +73,11 @@ def score_episode(
     displaced = metrics.displaced_volumes(pred, start)
     truth_displaced = metrics.displaced_volumes(truth, start)
     scores["effective_swell"] = displaced["effective_swell"]
+    # The same estimator applied to the simulator's own frames. It recovers the swell
+    # factor exactly -- relaxation moves equal volumes up and down, so it cancels in the
+    # ratio -- which makes this the honest reference for the predicted value rather than
+    # the nominal constant.
+    scores["effective_swell_true"] = truth_displaced["effective_swell"]
     with np.errstate(divide="ignore", invalid="ignore"):
         scores["displaced_error"] = np.where(
             truth_displaced["down"] > 1e-9,
