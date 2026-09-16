@@ -59,6 +59,12 @@ def curve(curves: dict, run: str, metric: str, stat: str = "median"):
     return np.array(horizons), np.array(values, dtype=float)
 
 
+def short_name(run_id: str) -> str:
+    """Drop the parts every run shares, so labels stay readable on a crowded axis."""
+    return (run_id.replace("_n2000", "").replace("_s0", "")
+            .replace("latentB_", "B/").replace("latentA_", "A/").replace("unet_", "unet/"))
+
+
 def series(frame: pd.DataFrame, run: str, split: str, column: str):
     at = frame[(frame["run_id"] == run) & (frame["eval_split"] == split)].sort_values("horizon")
     return at["horizon"].to_numpy(), at[column].to_numpy()
@@ -73,7 +79,7 @@ def horizon_curves(curves: dict, split: str, out: Path) -> None:
         for run in runs:
             k, value = curve(curves, run, metric)
             if len(k):
-                ax.plot(k, value * 1000, lw=1.4, label=run)
+                ax.plot(k, value * 1000, lw=1.4, label=short_name(run))
         for name, style in zip(BASELINES, ["--", ":"]):
             k, value = curve(curves, name, metric)
             if len(k):
@@ -84,7 +90,7 @@ def horizon_curves(curves: dict, split: str, out: Path) -> None:
         ax.set_title(f"Prediction error, {label}")
         mark_training_horizon(ax)
 
-    axes[1].legend(fontsize=6.5, loc="upper left", ncol=1)
+    axes[1].legend(fontsize=6.5, loc="center left", bbox_to_anchor=(1.02, 0.5))
     fig.suptitle(f"Horizon error on {split}", y=1.02, fontsize=10)
     fig.tight_layout()
     fig.savefig(out / f"horizon_{split}.png", bbox_inches="tight")
@@ -98,7 +104,7 @@ def volume_figure(curves: dict, split: str, out: Path) -> None:
         k, median = curve(curves, run, "eps_net")
         if not len(k):
             continue
-        line, = ax.plot(k, median * 100, lw=1.6, label=run)
+        line, = ax.plot(k, median * 100, lw=1.6, label=short_name(run))
         _, low = curve(curves, run, "eps_net", "p10")
         _, high = curve(curves, run, "eps_net", "p90")
         if len(low) == len(k):
@@ -113,7 +119,7 @@ def volume_figure(curves: dict, split: str, out: Path) -> None:
     ax.set_xlabel("rollout step")
     ax.set_ylabel("volume error, % of material excavated")
     ax.set_title("Does the model conserve mass?")
-    ax.legend(fontsize=6.5, loc="upper left")
+    ax.legend(fontsize=6.5, loc="center left", bbox_to_anchor=(1.02, 0.5))
     fig.tight_layout()
     fig.savefig(out / f"volume_{split}.png", bbox_inches="tight")
     plt.close(fig)
@@ -130,11 +136,13 @@ def accuracy_versus_physics(frame: pd.DataFrame, split: str, out: Path, horizon:
     if at.empty:
         return
     fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.0))
-    for ax, (column, label) in zip(axes, [
-        ("eps_net_median", f"|volume error| at k={horizon} (%)"),
-        ("repose_violation_median", f"repose violation at k={horizon} (% of cells)"),
+    for ax, (column, label, title) in zip(axes, [
+        ("eps_net_median", f"|volume error| at k={horizon} (%)", "mass conservation"),
+        ("repose_violation_median", f"repose violation at k={horizon} (% of cells)",
+         "angle of repose"),
     ]):
-        for _, row in at.iterrows():
+        placed = []
+        for _, row in at.sort_values("mae_median").iterrows():
             if column not in row or not np.isfinite(row[column]):
                 continue
             x = row["mae_median"] * 1000
@@ -143,12 +151,18 @@ def accuracy_versus_physics(frame: pd.DataFrame, split: str, out: Path, horizon:
             ax.scatter(x, y, s=46 if baseline else 30,
                        marker="X" if baseline else "o",
                        color="crimson" if baseline else "steelblue", zorder=3)
-            ax.annotate(row["run_id"], (x, y), fontsize=5.5,
+            # Skip a label that would land on top of one already drawn -- with several
+            # runs scoring alike the annotations otherwise pile into an unreadable smear.
+            if any(abs(np.log10(max(x, 1e-9)) - np.log10(max(px, 1e-9))) < 0.02
+                   and abs(y - py) < 0.02 * max(abs(y), 1.0) for px, py in placed):
+                continue
+            ax.annotate(short_name(row["run_id"]), (x, y), fontsize=5.5,
                         xytext=(3, 3), textcoords="offset points")
+            placed.append((x, y))
         ax.set_xscale("log")
         ax.set_xlabel(f"median MAE at k={horizon} (mm)")
         ax.set_ylabel(label)
-        ax.set_title("useful models land lower-left")
+        ax.set_title(f"{title}: useful models land lower-left", fontsize=9)
     fig.suptitle(f"Accuracy against physics plausibility, {split}", y=1.02, fontsize=10)
     fig.tight_layout()
     fig.savefig(out / f"accuracy_vs_physics_{split}.png", bbox_inches="tight")
@@ -195,7 +209,7 @@ def transfer_figure(frame: pd.DataFrame, out: Path, horizon: int = 20) -> None:
     for i, run in enumerate(runs):
         values = [at[(at["run_id"] == run) & (at["eval_split"] == s)]["mae_median"].mean() * 1000
                   for s in splits]
-        ax.bar(np.arange(len(splits)) + i * width, values, width, label=run)
+        ax.bar(np.arange(len(splits)) + i * width, values, width, label=short_name(run))
     identity = [at[(at["run_id"] == "identity") & (at["eval_split"] == s)]["mae_median"].mean() * 1000
                 for s in splits]
     if np.isfinite(identity).any():
