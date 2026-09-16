@@ -26,6 +26,26 @@ TRAINING_HORIZON = 5
 IDENTITY_VOLUME_ERROR = -0.25
 BASELINES = ("identity", "mean_terrain")
 
+# The five configurations that carry the argument. Everything else is an ablation and
+# goes on its own figure -- fifteen lines on one axis is a picture nobody reads, and
+# matplotlib recycles its colour cycle after ten, so the legend stops being trustworthy.
+HEADLINE_RUNS = (
+    "unet_K5_n2000_s0",
+    "unet_K1_n2000_s0",
+    "latentB_K5_z64_n2000_s0",
+    "latentA_K5_z64_n2000_s0",
+    "latentB_K1_z64_n2000_s0",
+)
+
+
+def is_quarantined(run_id: str) -> bool:
+    """Volume-loss runs optimised the metric being reported; they never share an axis."""
+    return "volloss" in run_id
+
+
+def palette(n: int):
+    return [plt.get_cmap("tab20")(i % 20) for i in range(n)]
+
 plt.rcParams.update({
     "figure.dpi": 130, "savefig.dpi": 130, "font.size": 9,
     "axes.grid": True, "grid.alpha": 0.25, "axes.spines.top": False,
@@ -70,16 +90,17 @@ def series(frame: pd.DataFrame, run: str, split: str, column: str):
     return at["horizon"].to_numpy(), at[column].to_numpy()
 
 
-def horizon_curves(curves: dict, split: str, out: Path) -> None:
+def horizon_curves(curves: dict, split: str, out: Path, runs=None, suffix="") -> None:
     fig, axes = plt.subplots(1, 2, figsize=(9.5, 3.8))
-    runs = [r for r in curves if r not in BASELINES]
+    runs = runs if runs is not None else [r for r in curves if r not in BASELINES]
+    colours = palette(len(runs))
 
     for ax, (metric, label) in zip(axes, [("mae", "all cells"),
                                           ("masked_mae", "cells that moved")]):
-        for run in runs:
+        for run, colour in zip(runs, colours):
             k, value = curve(curves, run, metric)
             if len(k):
-                ax.plot(k, value * 1000, lw=1.4, label=short_name(run))
+                ax.plot(k, value * 1000, lw=1.5, color=colour, label=short_name(run))
         for name, style in zip(BASELINES, ["--", ":"]):
             k, value = curve(curves, name, metric)
             if len(k):
@@ -93,18 +114,20 @@ def horizon_curves(curves: dict, split: str, out: Path) -> None:
     axes[1].legend(fontsize=6.5, loc="center left", bbox_to_anchor=(1.02, 0.5))
     fig.suptitle(f"Horizon error on {split}", y=1.02, fontsize=10)
     fig.tight_layout()
-    fig.savefig(out / f"horizon_{split}.png", bbox_inches="tight")
+    fig.savefig(out / f"horizon_{split}{suffix}.png", bbox_inches="tight")
     plt.close(fig)
 
 
-def volume_figure(curves: dict, split: str, out: Path) -> None:
+def volume_figure(curves: dict, split: str, out: Path, runs=None, suffix="") -> None:
     """The headline. Signed, so hallucinated material reads positive."""
-    fig, ax = plt.subplots(figsize=(6.2, 4.0))
-    for run in [r for r in curves if r not in BASELINES]:
+    fig, ax = plt.subplots(figsize=(6.6, 4.2))
+    runs = runs if runs is not None else [r for r in curves if r not in BASELINES]
+    colours = palette(len(runs))
+    for run, colour in zip(runs, colours):
         k, median = curve(curves, run, "eps_net")
         if not len(k):
             continue
-        line, = ax.plot(k, median * 100, lw=1.6, label=short_name(run))
+        line, = ax.plot(k, median * 100, lw=1.7, color=colour, label=short_name(run))
         _, low = curve(curves, run, "eps_net", "p10")
         _, high = curve(curves, run, "eps_net", "p90")
         if len(low) == len(k):
@@ -121,7 +144,7 @@ def volume_figure(curves: dict, split: str, out: Path) -> None:
     ax.set_title("Does the model conserve mass?")
     ax.legend(fontsize=6.5, loc="center left", bbox_to_anchor=(1.02, 0.5))
     fig.tight_layout()
-    fig.savefig(out / f"volume_{split}.png", bbox_inches="tight")
+    fig.savefig(out / f"volume_{split}{suffix}.png", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -269,9 +292,16 @@ def main() -> None:
     out = args.results / "figures"
     out.mkdir(parents=True, exist_ok=True)
 
-    curves = load_curves(args.runs, args.split)
-    horizon_curves(curves, args.split, out)
-    volume_figure(curves, args.split, out)
+    curves = {r: c for r, c in load_curves(args.runs, args.split).items()
+              if not is_quarantined(r)}
+    headline = [r for r in HEADLINE_RUNS if r in curves]
+    ablations = [r for r in curves if r not in BASELINES and r not in headline]
+
+    horizon_curves(curves, args.split, out, headline)
+    volume_figure(curves, args.split, out, headline)
+    if ablations:
+        horizon_curves(curves, args.split, out, ablations, suffix="_ablations")
+        volume_figure(curves, args.split, out, ablations, suffix="_ablations")
     accuracy_versus_physics(frame, args.split, out)
     sweep_figure(frame, args.split, out)
     transfer_figure(frame, out)

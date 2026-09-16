@@ -117,9 +117,23 @@ def main() -> None:
     parser.add_argument("--results", type=Path, default=ROOT / "results")
     parser.add_argument("--split", default="test_indist")
     parser.add_argument("--allow-mixed", action="store_true")
+    parser.add_argument("--volume-loss-arm", action="store_true",
+                        help="report the quarantined volume-loss runs instead")
     args = parser.parse_args()
 
     frame = load(args.results)
+    # The quarantined arm is dropped by default rather than raising: it optimised the
+    # conservation residual directly, so its volume number says nothing about whether a
+    # generically trained model conserves mass. It is reported on its own.
+    if "uses_volume_loss" in frame:
+        quarantined = frame["uses_volume_loss"].fillna(False).astype(bool)
+        keep = quarantined if args.volume_loss_arm else ~quarantined
+        dropped = sorted(frame.loc[~keep, "run_id"].unique())
+        frame = frame[keep]
+        if dropped and not args.volume_loss_arm:
+            print(f"excluding {len(dropped)} quarantined volume-loss run(s): "
+                  + ", ".join(dropped))
+            print("  (report them on their own with --volume-loss-arm)\n")
     guard_volume_loss(frame, args.allow_mixed)
 
     out_dir = args.results / "tables"

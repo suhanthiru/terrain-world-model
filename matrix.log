@@ -51,3 +51,83 @@ train split currently offers 3500 episodes
 
 === train unet_K5_n2000_s0 ===
 $ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id unet_K5_n2000_s0 --arch unet --latent-dim 64 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+train split currently offers 6000 episodes
+
+=== latentB_K5_z64_n2000_s0: already trained, skipping ===
+
+=== latentA_K5_z64_n2000_s0: already trained, skipping ===
+
+=== train unet_K5_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id unet_K5_n2000_s0 --arch unet --latent-dim 64 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train unet_K1_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id unet_K1_n2000_s0 --arch unet --latent-dim 64 --k-train 1 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train latentB_K1_z64_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K1_z64_n2000_s0 --arch latentB --latent-dim 64 --k-train 1 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train latentB_K5_z64_noact_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K5_z64_noact_n2000_s0 --arch latentB --latent-dim 64 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --no-use-action --no-uses-volume-loss
+
+=== train latentB_K5_z16_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K5_z16_n2000_s0 --arch latentB --latent-dim 16 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train latentB_K5_z256_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K5_z256_n2000_s0 --arch latentB --latent-dim 256 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train latentB_K5_z64_n250_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K5_z64_n250_s0 --arch latentB --latent-dim 64 --k-train 5 --train-size 250 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train latentB_K5_z64_n500_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K5_z64_n500_s0 --arch latentB --latent-dim 64 --k-train 5 --train-size 500 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train latentB_K5_z64_n1000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K5_z64_n1000_s0 --arch latentB --latent-dim 64 --k-train 5 --train-size 1000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train latentB_K5_z64_n4000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K5_z64_n4000_s0 --arch latentB --latent-dim 64 --k-train 5 --train-size 4000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== train latentB_K5_z64_n6000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id latentB_K5_z64_n6000_s0 --arch latentB --latent-dim 64 --k-train 5 --train-size 6000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+
+=== evaluate latentB_K5_z64_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z64_n2000_s0 --data-root data/v1
+
+=== evaluate latentA_K5_z64_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentA_K5_z64_n2000_s0 --data-root data/v1
+
+=== evaluate unet_K5_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id unet_K5_n2000_s0 --data-root data/v1
+
+=== evaluate unet_K1_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id unet_K1_n2000_s0 --data-root data/v1
+
+=== evaluate latentB_K1_z64_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K1_z64_n2000_s0 --data-root data/v1
+
+=== evaluate latentB_K5_z64_noact_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z64_noact_n2000_s0 --data-root data/v1
+
+=== evaluate latentB_K5_z16_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z16_n2000_s0 --data-root data/v1
+
+=== evaluate latentB_K5_z256_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z256_n2000_s0 --data-root data/v1
+
+=== evaluate latentB_K5_z64_n250_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z64_n250_s0 --data-root data/v1
+
+=== evaluate latentB_K5_z64_n500_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z64_n500_s0 --data-root data/v1
+
+=== evaluate latentB_K5_z64_n1000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z64_n1000_s0 --data-root data/v1
+
+=== evaluate latentB_K5_z64_n4000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z64_n4000_s0 --data-root data/v1
+
+=== evaluate latentB_K5_z64_n6000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/evaluate.py --run-id latentB_K5_z64_n6000_s0 --data-root data/v1
+
+13 configurations in stages ['core']
+all jobs completed

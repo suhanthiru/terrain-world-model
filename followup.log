@@ -4,3 +4,17 @@ waiting for 6000 training episodes...
 waiting for 6000 training episodes...
   6000 training episodes: ready
 waiting for the GPU to be free...
+waiting for 6000 training episodes...
+  6000 training episodes: ready
+waiting for the GPU to be free...
+  the GPU to be free: ready
+
+training episodes available: 6000
+
+### stage extra
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/run_matrix.py --stage extra --jobs 1 --lr 1e-4 --data-root data/v1
+
+### stage baselines
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/run_matrix.py --stage baselines --jobs 1 --lr 1e-4 --data-root data/v1
+
+finished; 0 stage(s) reported failures: []

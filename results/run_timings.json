@@ -1,0 +1,16 @@
+{
+  "unet_K5_n2000_s0": 8617.5,
+  "unet_K1_n2000_s0": 556.9,
+  "latentB_K1_z64_n2000_s0": 498.3,
+  "latentB_K5_z64_noact_n2000_s0": 416.0,
+  "latentB_K5_z16_n2000_s0": 747.7,
+  "latentB_K5_z256_n2000_s0": 976.2,
+  "latentB_K5_z64_n250_s0": 413.5,
+  "latentB_K5_z64_n500_s0": 535.0,
+  "latentB_K5_z64_n1000_s0": 718.1,
+  "latentB_K5_z64_n4000_s0": 602.9,
+  "latentB_K5_z64_n6000_s0": 855.7,
+  "unet_K5_noact_n2000_s0": 2514.2,
+  "latentB_K5_z64_l1_n2000_s0": 550.8,
+  "latentB_K5_z64_volloss_n2000_s0": 465.4
+}

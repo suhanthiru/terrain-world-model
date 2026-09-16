@@ -137,7 +137,31 @@ touched region, which is roughly 5% of a single swing and the same order as the 
 being reported. Measured, the fixed-point format contributes **0.009%** of the material
 excavated to the volume metric.
 
+## Results
+
+Sixteen trained models, two untrained baselines, six evaluation splits, fifty-step
+rollouts. Full writeup in [RESULTS.md](RESULTS.md).
+
+The short version: **a latent world model beats the do-nothing baseline on pixel error
+while inventing 60% extra material from the very first step.**
+
+| k | latent MAE | identity MAE | latent volume | identity volume |
+|---:|---:|---:|---:|---:|
+| 1 | **3.6 mm** | 4.6 mm | **+59.9%** | -25.0% |
+| 20 | **53.8 mm** | 63.7 mm | **+59.2%** | -25.0% |
+
+The volume error is flat across horizons, so it is a systematic bias in the first
+prediction rather than drift accumulating through a rollout. Decomposing the movement says
+why: the model moves only a fifth of the material that should go down (-80.8%) while
+depositing roughly the right amount, giving an effective swell factor of 5.3 where the
+simulator's is exactly 1.25. It reproduces the smooth deposited cone and not the sharp,
+localised bucket cut.
+
+A pixel U-Net matched to within 0.32% on parameters recovers the excavation almost exactly
+(-0.7%) and conserves mass to 10%, so the hallucination is a cost of the bottleneck rather
+than of learning. Both architectures violate the angle of repose about equally, so that is
+a separate failure that skip connections do not touch.
+
 ## Status
 
-Simulator, dataset, models, training and evaluation are in place and tested. Experiment
-matrix running.
+Complete. Simulator, dataset, models, training, evaluation, ablations and figures.
