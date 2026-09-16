@@ -110,12 +110,34 @@ def repose_violation(pred: np.ndarray, tan_theta: float, grid: Grid = DEFAULT_GR
     return np.array([float((max_slope(f, grid.dx) > limit).mean()) for f in pred])
 
 
+_WINDOW_CACHE: dict[int, np.ndarray] = {}
+_BAND_CACHE: dict[int, np.ndarray] = {}
+
+
+def _high_freq_band(n: int) -> tuple[np.ndarray, np.ndarray]:
+    """A Hann window and the high-frequency mask for an n x n field.
+
+    The window is not optional. The domain does not wrap -- there are walls -- so an
+    unwindowed FFT sees a step discontinuity where the array edges meet and smears its
+    energy across every frequency including this band. That leakage swamps the actual
+    terrain texture: measured on a smooth surface, a sigma=2 Gaussian blur left the
+    apparent high-frequency energy unchanged at 4.3e3, because essentially all of it was
+    boundary artifact rather than signal. Tapering the edges to zero removes the
+    discontinuity and the metric starts measuring what it claims to.
+    """
+    if n not in _WINDOW_CACHE:
+        hann = np.hanning(n)
+        _WINDOW_CACHE[n] = np.outer(hann, hann)
+        freq = np.fft.fftfreq(n)
+        _BAND_CACHE[n] = np.hypot(*np.meshgrid(freq, freq, indexing="ij")) > HIGH_FREQ_CUTOFF
+    return _WINDOW_CACHE[n], _BAND_CACHE[n]
+
+
 def _radial_high_freq(field: np.ndarray) -> float:
-    spectrum = np.abs(np.fft.fft2(field - field.mean())) ** 2
-    n = field.shape[0]
-    freq = np.fft.fftfreq(n)
-    radial = np.hypot(*np.meshgrid(freq, freq, indexing="ij"))
-    return float(spectrum[radial > HIGH_FREQ_CUTOFF].sum())
+    window, band = _high_freq_band(field.shape[0])
+    tapered = (field - field.mean()) * window
+    spectrum = np.abs(np.fft.fft2(tapered)) ** 2
+    return float(spectrum[band].sum())
 
 
 def high_frequency_ratio(pred: np.ndarray, truth: np.ndarray) -> np.ndarray:
