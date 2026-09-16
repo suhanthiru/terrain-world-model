@@ -26,6 +26,7 @@ import torch  # noqa: E402
 from wm.data.dataset import EpisodeStore  # noqa: E402
 from wm.data.storage import read_manifest  # noqa: E402
 from wm.eval.failures import AUDIT_HORIZONS, classify, summarise  # noqa: E402
+from wm.eval.frames import dump_worst  # noqa: E402
 from wm.eval.rollout import rollout_episodes, score_episode  # noqa: E402
 from wm.models import build_model, count_parameters  # noqa: E402
 
@@ -61,7 +62,7 @@ def load_model(run_dir: Path, arch: str | None, device: str):
 
 
 def evaluate_split(model, store: EpisodeStore, swell: float, device: str,
-                   protocol: str | None) -> tuple[pd.DataFrame, list[dict]]:
+                   protocol: str | None) -> tuple[pd.DataFrame, list[dict], np.ndarray]:
     predictions = rollout_episodes(model, store, device=device, protocol=protocol)
 
     rows, failures = [], []
@@ -84,7 +85,7 @@ def evaluate_split(model, store: EpisodeStore, swell: float, device: str,
                 "episode": e, "episode_uid": store.meta[e]["episode_uid"],
                 **classify(scores, predictions[e], horizon),
             })
-    return pd.DataFrame(rows), failures
+    return pd.DataFrame(rows), failures, predictions
 
 
 def summarise_split(frame: pd.DataFrame, horizons=None) -> dict:
@@ -121,6 +122,8 @@ def main() -> None:
     parser.add_argument("--results", type=Path, default=ROOT / "results")
     parser.add_argument("--splits", nargs="*", default=list(EVAL_SPLITS))
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--no-frames", action="store_true",
+                        help="skip the failure-mode frame panels")
     args = parser.parse_args()
 
     run_dir = Path(args.runs) / args.run_id
@@ -132,7 +135,9 @@ def main() -> None:
     for split in args.splits:
         started = time.perf_counter()
         store = EpisodeStore(args.data_root, split)
-        frame, failures = evaluate_split(model, store, swell, args.device, args.protocol)
+        frame, failures, predictions = evaluate_split(
+            model, store, swell, args.device, args.protocol
+        )
 
         out_dir = run_dir / "eval" / split
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -143,6 +148,10 @@ def main() -> None:
             json.dumps(summarise_split(frame, all_horizons), indent=2)
         )
         summary = summarise_split(frame)
+        if not args.no_frames:
+            for horizon in AUDIT_HORIZONS:
+                dump_worst(out_dir / "frames", failures, frame, predictions, store, horizon)
+
         (out_dir / "failures.json").write_text(json.dumps({
             "thresholds_frozen_on": "dev, baseline models only",
             "by_horizon": {
