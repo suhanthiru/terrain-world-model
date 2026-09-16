@@ -76,11 +76,16 @@ EXTRA = [
 # Short probes to pick a learning rate per architecture. Comparing a proposed model at
 # its tuned learning rate against a baseline at someone else's is the standard way to
 # make a baseline look worse than it is, so each architecture gets its own sweep and the
-# results are reported.
-LR_PROBE_EPOCHS = 6
+# numbers go in the appendix.
+#
+# Probed at a one-step horizon, deliberately. The five-step runs ramp their horizon over
+# the first seven epochs, so a probe short enough to be affordable would never reach K=5
+# and would be selecting a rate for an objective no real run uses. One step is a clean,
+# common objective that every architecture here shares.
+LR_PROBE_EPOCHS = 5
 LR_PROBE = [
-    dict(spec(arch=arch, k_train=k), lr=lr, run_id=f"lrprobe_{arch}_K{k}_lr{lr:g}")
-    for arch, k in (("latentB", 5), ("unet", 5))
+    dict(spec(arch=arch, k_train=1), lr=lr, run_id=f"lrprobe_{arch}_K1_lr{lr:g}")
+    for arch in ("latentB", "unet")
     for lr in (1e-4, 3e-4, 1e-3)
 ]
 
