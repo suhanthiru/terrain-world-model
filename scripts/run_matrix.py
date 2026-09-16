@@ -142,7 +142,7 @@ def estimate_gpu_gb(cfg: dict) -> float:
     return GPU_GB.get((cfg["arch"], cfg["k_train"]), 3.0)
 
 
-def run_pool(jobs: list[dict], max_jobs: int, dry_run: bool) -> tuple[dict, list[str]]:
+def run_pool(jobs: list[dict], max_jobs: int, dry_run: bool) -> tuple[dict, list[str], list[str]]:
     """Run training jobs concurrently, within a GPU memory budget.
 
     These models are small enough that a single one leaves the card mostly idle -- it
@@ -153,15 +153,30 @@ def run_pool(jobs: list[dict], max_jobs: int, dry_run: bool) -> tuple[dict, list
     """
     timings: dict[str, float] = {}
     failed: list[str] = []
+    # Names of runs that actually produced a checkpoint. Reported explicitly rather than
+    # inferred as "everything that did not fail" -- a job the pool abandoned never ran at
+    # all, and treating it as trained would send evaluation after a checkpoint that does
+    # not exist.
+    succeeded: list[str] = []
     pending = list(jobs)
     running: list[dict] = []
 
     while pending or running:
+        # Stop admitting once several jobs have failed and none has succeeded. If the
+        # failures are slow ones -- running out of memory half an hour in, say -- letting
+        # the whole stage play out would burn hours to learn nothing.
+        if not running and failed and len(failed) >= CONSECUTIVE_FAILURE_LIMIT and not succeeded:
+            print(f"!!! abandoning {len(pending)} unstarted job(s): "
+                  f"{len(failed)} failed, none succeeded", flush=True)
+            break
+
         while pending:
             candidate = pending[0]
             used = sum(j["gpu_gb"] for j in running)
             if running and (len(running) >= max_jobs
                             or used + candidate["gpu_gb"] > GPU_BUDGET_GB):
+                break
+            if len(failed) >= CONSECUTIVE_FAILURE_LIMIT and not succeeded:
                 break
             pending.pop(0)
             print(f"\n=== start {candidate['label']} "
@@ -169,6 +184,7 @@ def run_pool(jobs: list[dict], max_jobs: int, dry_run: bool) -> tuple[dict, list
             print("$ " + " ".join(candidate["cmd"]), flush=True)
             if dry_run:
                 timings[candidate["label"]] = 0.0
+                succeeded.append(candidate["name"])
                 continue
             log = ROOT / "runs" / candidate["name"]
             log.mkdir(parents=True, exist_ok=True)
@@ -192,13 +208,15 @@ def run_pool(jobs: list[dict], max_jobs: int, dry_run: bool) -> tuple[dict, list
             elapsed = time.perf_counter() - job["started"]
             timings[job["label"]] = elapsed
             ok = job["proc"].returncode == 0
+            if ok:
+                succeeded.append(job["name"])
             status = "done" if ok else f"FAILED ({job['proc'].returncode})"
             print(f"=== {status}: {job['label']} after {elapsed / 60:.1f} min ===", flush=True)
             if not ok:
                 failed.append(job["label"])
                 print(f"    see runs/{job['name']}/train_stdout.log", flush=True)
 
-    return timings, failed
+    return timings, failed, succeeded
 
 
 
@@ -274,16 +292,16 @@ def main() -> None:
                             "gpu_gb": estimate_gpu_gb(cfg)})
 
         if args.jobs > 1 and pending:
-            pool_timings, pool_failed = run_pool(pending, args.jobs, args.dry_run)
+            pool_timings, pool_failed, pool_trained = run_pool(pending, args.jobs, args.dry_run)
             timings.update(pool_timings)
             failed.extend(pool_failed)
-            trained += [j["name"] for j in pending if j["label"] not in pool_failed]
+            trained += pool_trained
             # The consecutive-failure rule does not apply to jobs that ran side by side,
             # so apply the equivalent check: several failing and none succeeding is
             # systematic, and there is nothing to gain from starting the next stage.
-            if len(pool_failed) >= CONSECUTIVE_FAILURE_LIMIT and len(pool_failed) == len(pending):
+            if len(pool_failed) >= CONSECUTIVE_FAILURE_LIMIT and not trained:
                 raise SystemExit(
-                    f"stopping: every job in stage {stage!r} failed ({len(pool_failed)} of them)"
+                    f"stopping: {len(pool_failed)} jobs in stage {stage!r} failed and none succeeded"
                 )
         else:
             for job in pending:
