@@ -27,3 +27,27 @@ $ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Py
 
 === start train unet_K5_n2000_s0 (9.4 GB, 1 running) ===
 $ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id unet_K5_n2000_s0 --arch unet --latent-dim 64 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+train split currently offers 3500 episodes
+
+=== latentB_K5_z64_n2000_s0: already trained, skipping ===
+
+=== latentA_K5_z64_n2000_s0: already trained, skipping ===
+
+=== latentB_K5_z64_n4000_s0: deferred, needs 4000 episodes but only 3500 are generated ===
+
+=== latentB_K5_z64_n6000_s0: deferred, needs 6000 episodes but only 3500 are generated ===
+
+=== train unet_K5_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id unet_K5_n2000_s0 --arch unet --latent-dim 64 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss
+train split currently offers 3500 episodes
+
+=== latentB_K5_z64_n2000_s0: already trained, skipping ===
+
+=== latentA_K5_z64_n2000_s0: already trained, skipping ===
+
+=== latentB_K5_z64_n4000_s0: deferred, needs 4000 episodes but only 3500 are generated ===
+
+=== latentB_K5_z64_n6000_s0: deferred, needs 6000 episodes but only 3500 are generated ===
+
+=== train unet_K5_n2000_s0 ===
+$ C:\Users\jarna\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe scripts/train.py --run-id unet_K5_n2000_s0 --arch unet --latent-dim 64 --k-train 5 --train-size 2000 --seed 0 --loss huber --lr 0.0001 --data-root data/v1 --use-action --no-uses-volume-loss

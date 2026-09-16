@@ -119,16 +119,31 @@ STAGES = {"lr": LR_PROBE, "core": CORE, "seeds": SEEDS, "extra": EXTRA}
 CONSECUTIVE_FAILURE_LIMIT = 3
 
 
-def launch(cmd: list[str], label: str, dry_run: bool) -> tuple[float, bool]:
+def launch(cmd: list[str], label: str, dry_run: bool,
+           log_path: Path | None = None) -> tuple[float, bool]:
+    """Run one job to completion, sending its output to log_path.
+
+    The redirection has to be explicit. This process may have pointed its own sys.stdout
+    at a file (see wm.runlog), but that is a Python-level object -- a child inherits the
+    operating system's stdout descriptor instead, which for a detached process points
+    nowhere at all. Without this, a training run's entire output is silently discarded
+    and there is no way to tell a healthy run from a stuck one.
+    """
     print(f"\n=== {label} ===", flush=True)
     print("$ " + " ".join(cmd), flush=True)
     if dry_run:
         return 0.0, True
     started = time.perf_counter()
-    result = subprocess.run(cmd, cwd=ROOT)
+    if log_path is None:
+        result = subprocess.run(cmd, cwd=ROOT)
+    else:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8", errors="replace") as handle:
+            result = subprocess.run(cmd, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT)
     elapsed = time.perf_counter() - started
     if result.returncode != 0:
-        print(f"!!! {label} failed with exit code {result.returncode}", flush=True)
+        print(f"!!! {label} failed with exit code {result.returncode}"
+              + (f"; see {log_path}" if log_path else ""), flush=True)
         return elapsed, False
     return elapsed, True
 
@@ -283,7 +298,8 @@ def main() -> None:
     if "baselines" in args.stage:
         for name in BASELINES:
             _, ok = launch([python, "scripts/evaluate.py", "--run-id", name, "--arch", name,
-                            "--data-root", args.data_root], f"baseline {name}", args.dry_run)
+                            "--data-root", args.data_root], f"baseline {name}", args.dry_run,
+                           ROOT / "runs" / name / "eval_stdout.log")
             record(f"baseline {name}", ok)
 
     def train_command(cfg: dict, stage: str) -> list[str]:
@@ -344,7 +360,10 @@ def main() -> None:
                 )
         else:
             for job in pending:
-                timings[job["name"]], ok = launch(job["cmd"], job["label"], args.dry_run)
+                timings[job["name"]], ok = launch(
+                    job["cmd"], job["label"], args.dry_run,
+                    ROOT / "runs" / job["name"] / "train_stdout.log",
+                )
                 record(job["label"], ok)
                 if ok:
                     trained.append(job["name"])
@@ -356,7 +375,8 @@ def main() -> None:
         if stage != "lr":
             for name in trained:
                 _, ok = launch([python, "scripts/evaluate.py", "--run-id", name,
-                                "--data-root", args.data_root], f"evaluate {name}", args.dry_run)
+                                "--data-root", args.data_root], f"evaluate {name}", args.dry_run,
+                               ROOT / "runs" / name / "eval_stdout.log")
                 record(f"evaluate {name}", ok)
 
     if timings and not args.dry_run:
