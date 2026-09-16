@@ -32,23 +32,30 @@ from .blocks import ActionEncoder, ConvBlock, CoordChannels, DownBlock, UpBlock,
 ENCODER_WIDTHS = (24, 48, 64, 96, 128)
 DECODER_WIDTHS = (128, 96, 64, 48, 24)
 BOTTLENECK_CH = 32
-BOTTLENECK_HW = 4
 ACTION_EMBED = 64
 GRU_HIDDEN = 256
+
+
+def bottleneck_hw(size: int) -> int:
+    """Spatial size after the encoder's stride-2 stack."""
+    hw = size // 2 ** len(ENCODER_WIDTHS)
+    if hw < 1:
+        raise ValueError(f"input size {size} is too small for {len(ENCODER_WIDTHS)} halvings")
+    return hw
 
 
 class Encoder(nn.Module):
     def __init__(self, latent_dim: int, size: int = 128) -> None:
         super().__init__()
         self.coords = CoordChannels(size)
-        widths = ENCODER_WIDTHS
+        self.hw = bottleneck_hw(size)
         layers, in_ch = [], 3
-        for out_ch in widths:
+        for out_ch in ENCODER_WIDTHS:
             layers.append(DownBlock(in_ch, out_ch))
             in_ch = out_ch
         self.down = nn.Sequential(*layers)
         self.squeeze = nn.Conv2d(in_ch, BOTTLENECK_CH, 1)
-        self.to_latent = nn.Linear(BOTTLENECK_CH * BOTTLENECK_HW**2, latent_dim)
+        self.to_latent = nn.Linear(BOTTLENECK_CH * self.hw**2, latent_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = self.down(self.coords(x))
@@ -56,9 +63,10 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dim: int) -> None:
+    def __init__(self, latent_dim: int, size: int = 128) -> None:
         super().__init__()
-        self.from_latent = nn.Linear(latent_dim, BOTTLENECK_CH * BOTTLENECK_HW**2)
+        self.hw = bottleneck_hw(size)
+        self.from_latent = nn.Linear(latent_dim, BOTTLENECK_CH * self.hw**2)
         self.expand = nn.Conv2d(BOTTLENECK_CH, DECODER_WIDTHS[0], 1)
         self.norm = group_norm(DECODER_WIDTHS[0])
         self.act = nn.SiLU()
@@ -71,7 +79,7 @@ class Decoder(nn.Module):
         self.out = near_zero_init(nn.Conv2d(in_ch, 1, 3, padding=1))
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
-        h = self.from_latent(z).view(-1, BOTTLENECK_CH, BOTTLENECK_HW, BOTTLENECK_HW)
+        h = self.from_latent(z).view(-1, BOTTLENECK_CH, self.hw, self.hw)
         h = self.act(self.norm(self.expand(h)))
         return self.out(self.up(h)).squeeze(1)
 
@@ -96,7 +104,7 @@ class LatentWorldModel(nn.Module):
         self.latent_dim = latent_dim
 
         self.encoder = Encoder(latent_dim, size=size)
-        self.decoder = Decoder(latent_dim)
+        self.decoder = Decoder(latent_dim, size=size)
         # Kept even when use_action is False: the ablation feeds a zero action vector so
         # the architecture, parameter count and optimiser state stay identical and the
         # only thing that changes is the information available.

@@ -46,6 +46,57 @@ conservation violation attributable to the model rather than to the simulator.
 Terrain families vary the angle of repose (25-45 deg), the swell factor, and the initial
 surface (flat, trench, slope, existing pile). These become the train/test splits.
 
+## Layout
+
+```
+src/terrain/   simulator: relaxation, bucket cut, deposit, terrain families
+src/wm/        data pipeline, models, training, evaluation
+scripts/       generate_dataset, train, evaluate, run_matrix, make_tables, make_figures
+tests/         conservation, physics, storage, metric and training invariants
+```
+
+```bash
+python scripts/generate_dataset.py --root data/v1     # ~12 GB, resumable
+python scripts/run_matrix.py --stage baselines core   # 13 training runs + 2 baselines
+python scripts/make_tables.py && python scripts/make_figures.py
+```
+
+## The models
+
+Deliberately small and matched at about a million parameters each:
+
+- **latent** -- conv encoder to a 64-vector, action MLP, GRU transition, deconv decoder
+  predicting a *delta* heightmap. Two rollout protocols: `B` encodes once and rolls the
+  latent forward without ever looking at a heightmap again, which is the actual
+  world-model claim; `A` re-encodes its own prediction each step.
+- **U-Net** -- same job with skip connections instead of a bottleneck, action conditioning
+  by FiLM. Having no latent to roll, it is structurally confined to protocol `A`, which
+  is why a protocol-`A` latent model is trained alongside it. Comparing architectures
+  across different protocols would license no conclusion.
+- **identity** and **mean terrain** -- untrained references.
+
+The comparison is matched on parameters and explicitly *not* on compute: the U-Net runs
+at full resolution throughout and measures 15.0 ms per rollout step against 4.1 for the
+latent model. That asymmetry favours the U-Net and is reported rather than hidden.
+
+## What is measured
+
+Error at 1 / 5 / 20 / 50 steps as a curve, not a scalar, with the training horizon marked
+-- models train to five steps and are evaluated to fifty.
+
+The headline is volume: `eps_net(k)`, the predicted change in total material minus the
+true change, over the material actually excavated. It reads as *for every cubic metre the
+machine moved, the model created this much out of nothing*. Predicting no change scores
+exactly `-(swell - 1) = -25%` at every horizon, which is a free and exact reference line.
+
+Alongside it: angle-of-repose violations, a high-frequency energy ratio that catches
+blurring and checkerboarding in one number, and an automatic failure taxonomy.
+
+**No physics metric is ever reported alone.** Predicting nothing has zero repose
+violations and beats most models on volume, so a physics number without an accuracy
+number beside it rewards doing nothing. The default rendering is a two-dimensional
+scatter of accuracy against physics violation.
+
 ## Some things that turned out to matter
 
 - **8-neighbour relaxation, not 4.** With 4 neighbours the equilibrium pile is a
@@ -59,7 +110,35 @@ surface (flat, trench, slope, existing pile). These become the train/test splits
 - **Slicing, not `np.roll`.** `roll` wraps, which gives you periodic boundaries. Those are
   perfectly mass-conserving, so every conservation test passes while material teleports
   across the patch.
+- **Plain L1 does not train this problem.** Only about 5% of cells move in a step, so 95%
+  of targets are an exact zero. L1's gradient has the same magnitude however wrong a cell
+  is, so the static majority outvotes the few that moved and predicting no change is a
+  genuine optimisation attractor -- not merely a way to score well. Measured on a fixed
+  batch, the predicted delta was driven to 4e-6 m against a target of 5.2e-3 m and sat
+  exactly on the identity baseline at every learning rate tried. Huber fixes it by making
+  a nearly-correct static cell contribute a nearly-zero gradient. Reported error is still
+  absolute error; this changes how the models train, not how they are scored.
+- **A zero-initialised output layer does not train either.** It is an appealing trick --
+  the model starts bit-identical to the identity baseline -- but the gradient reaching
+  every upstream layer is proportional to that layer's own weights, so at zero the
+  encoder, GRU and action pathway get exactly nothing. The same bug in the U-Net's FiLM
+  conditioning left its entire action encoder dead. Both now start near zero instead.
+- **Window the FFT.** The domain has walls and does not wrap, so an unwindowed spectrum
+  is dominated by the step discontinuity where the array edges meet. That leakage made
+  the blur detector useless -- a heavy Gaussian blur left the apparent high-frequency
+  energy unchanged. With a Hann window it reads 0.03.
+
+## Storage
+
+Frames are int16 fixed-point at 0.2 mm, with the exact per-step volume bookkeeping stored
+separately in float64. Not float16: its error scales with magnitude and, worse, is
+identical for every cell at the same unrepresentable height. Terrain is full of flat
+regions, so those errors add coherently rather than cancelling -- about five litres over a
+touched region, which is roughly 5% of a single swing and the same order as the effect
+being reported. Measured, the fixed-point format contributes **0.009%** of the material
+excavated to the volume metric.
 
 ## Status
 
-Under construction. See the build order in the commit history.
+Simulator, dataset, models, training and evaluation are in place and tested. Experiment
+matrix running.
