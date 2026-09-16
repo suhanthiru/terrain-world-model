@@ -11,15 +11,6 @@ So the point of this repo is the evaluation harness, not the model. There is a s
 NumPy excavation simulator with exact mass bookkeeping to generate ground truth, a few
 deliberately small learned models, and a set of metrics built around volume conservation.
 
-## What's here
-
-```
-src/terrain/    the simulator: relaxation, bucket cut, deposit, terrain families
-src/wm/         data pipeline, models, evaluation
-scripts/        dataset generation, training, evaluation, figures
-tests/          conservation and physics invariants
-```
-
 ## The simulator
 
 128x128 heightmap at 5 cm/cell — a 6.4 m patch. One action is one dig-swing-dump cycle:
@@ -43,8 +34,16 @@ V_after - V_before == (swell - 1) * removed
 which holds to ~1e-15 m^3 over a 50-cycle episode. That is what makes a model's
 conservation violation attributable to the model rather than to the simulator.
 
-Terrain families vary the angle of repose (25-45 deg), the swell factor, and the initial
-surface (flat, trench, slope, existing pile). These become the train/test splits.
+Terrain families vary the angle of repose and the initial surface -- flat, trench, slope,
+existing pile -- and those become the train/test splits: models train on flat and trench
+at 30 degrees and are tested on slope and pile, at 40 degrees, on both at once, and on a
+held-out action policy.
+
+Swell is held fixed at 1.25 across the dataset even though the simulator supports varying
+it. A constant swell is what puts the identity baseline at exactly `-(swell - 1) = -25%`
+on the volume metric at every horizon, which is a free and exact reference line on the
+headline figure; varying it would smear that line without serving any axis the ablations
+actually test.
 
 ## Layout
 
