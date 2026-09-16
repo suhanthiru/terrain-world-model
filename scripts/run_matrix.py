@@ -22,6 +22,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from wm.data.storage import read_manifest  # noqa: E402
+
+
+def available_episodes(data_root: str, split: str = "train") -> int:
+    """How many episodes the manifest currently offers for a split."""
+    try:
+        return int(read_manifest(Path(data_root))["splits"][split]["n_episodes"])
+    except (FileNotFoundError, KeyError):
+        return 0
+
 
 def run_id(**kw) -> str:
     parts = [kw["arch"], f"K{kw['k_train']}"]
@@ -239,8 +249,11 @@ def main() -> None:
               flush=True)
 
     python = sys.executable
+    episodes_available = available_episodes(args.data_root)
+    print(f"train split currently offers {episodes_available} episodes", flush=True)
     timings: dict[str, float] = {}
     failed: list[str] = []
+    all_deferred: list[str] = []
     consecutive = 0
 
     def record(label: str, ok: bool) -> None:
@@ -280,16 +293,26 @@ def main() -> None:
         if stage == "baselines":
             continue
 
-        pending, trained = [], []
+        pending, trained, deferred = [], [], []
         for cfg in STAGES[stage]:
             name = cfg["run_id"]
             if args.skip_existing and (ROOT / "runs" / name / "ckpt_best.pt").exists():
                 print(f"\n=== {name}: already trained, skipping ===", flush=True)
                 trained.append(name)
                 continue
+            # Not a failure: the dataset is simply still being generated. Running this
+            # command again later picks the run up, and --skip-existing leaves the
+            # finished ones alone.
+            if cfg["train_size"] > episodes_available:
+                print(f"\n=== {name}: deferred, needs {cfg['train_size']} episodes but "
+                      f"only {episodes_available} are generated ===", flush=True)
+                deferred.append(name)
+                continue
             pending.append({"name": name, "label": f"train {name}",
                             "cmd": train_command(cfg, stage),
                             "gpu_gb": estimate_gpu_gb(cfg)})
+
+        all_deferred.extend(deferred)
 
         if args.jobs > 1 and pending:
             pool_timings, pool_failed, pool_trained = run_pool(pending, args.jobs, args.dry_run)

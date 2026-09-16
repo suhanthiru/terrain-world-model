@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "D:\autonomous_projs\world_model\scripts\generate_dataset.py", line 161, in <module>
+    main()
+  File "D:\autonomous_projs\world_model\scripts\generate_dataset.py", line 132, in main
+    splits[name] = generate_split(name, root, args.workers, args.limit)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\autonomous_projs\world_model\scripts\generate_dataset.py", line 82, in generate_split
+    stale.unlink()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\pathlib.py", line 1147, in unlink
+    os.unlink(self)
+PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'data\\v1\\shards\\train_014\\heights.npy'
