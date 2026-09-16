@@ -63,7 +63,15 @@ class EpisodeStore:
         heights = [r.heights for r in readers]
         counts = [len(r) for r in readers]
         total = sum(counts)
-        self.n_episodes = total if limit is None else min(limit, total)
+        # Refuse to quietly hand back fewer episodes than asked for. Silently truncating
+        # would let a run labelled n=6000 train on whatever happened to be generated,
+        # which would corrupt the data-size sweep in a way nothing downstream could see.
+        if limit is not None and limit > total:
+            raise ValueError(
+                f"split {split!r} holds {total} episodes but {limit} were requested; "
+                "the dataset is incomplete for this run"
+            )
+        self.n_episodes = total if limit is None else limit
         self.n_steps = readers[0].n_steps
 
         nbytes = self.n_episodes * (self.n_steps + 1) * int(np.prod(DEFAULT_GRID.shape)) * 2

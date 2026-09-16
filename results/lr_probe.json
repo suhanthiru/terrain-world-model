@@ -1,0 +1,36 @@
+{
+  "probes": [
+    {
+      "run_id": "lrprobe_latentB_K1_lr0.0001",
+      "arch": "latentB",
+      "lr": 0.0001,
+      "dev_mae": 0.22153348848223686,
+      "identity": 0.24248740697900453
+    },
+    {
+      "run_id": "lrprobe_latentB_K1_lr0.0003",
+      "arch": "latentB",
+      "lr": 0.0003,
+      "dev_mae": 0.2225424088537693,
+      "identity": 0.24248740449547768
+    },
+    {
+      "run_id": "lrprobe_latentB_K1_lr0.001",
+      "arch": "latentB",
+      "lr": 0.001,
+      "dev_mae": 0.2240255499879519,
+      "identity": 0.24248741132517657
+    },
+    {
+      "run_id": "lrprobe_unet_K1_lr0.0001",
+      "arch": "unet",
+      "lr": 0.0001,
+      "dev_mae": 0.1856725693990787,
+      "identity": 0.24186719581484795
+    }
+  ],
+  "best": {
+    "latentB": 0.0001,
+    "unet": 0.0001
+  }
+}
