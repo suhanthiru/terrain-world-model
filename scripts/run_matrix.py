@@ -101,15 +101,26 @@ BASELINES = ["identity", "mean_terrain"]
 STAGES = {"lr": LR_PROBE, "core": CORE, "seeds": SEEDS, "extra": EXTRA}
 
 
-def launch(cmd: list[str], label: str, dry_run: bool) -> float:
-    print(f"\n=== {label} ===\n$ {' '.join(cmd)}", flush=True)
+# Abort after this many failures in a row. One failure is usually a transient -- an
+# out-of-memory blip, a file still being written -- and losing the remaining runs to it
+# would waste hours. Several in a row means something systematic, and grinding through
+# the rest of the matrix producing nothing is worse than stopping.
+CONSECUTIVE_FAILURE_LIMIT = 3
+
+
+def launch(cmd: list[str], label: str, dry_run: bool) -> tuple[float, bool]:
+    print(f"\n=== {label} ===", flush=True)
+    print("$ " + " ".join(cmd), flush=True)
     if dry_run:
-        return 0.0
+        return 0.0, True
     started = time.perf_counter()
     result = subprocess.run(cmd, cwd=ROOT)
+    elapsed = time.perf_counter() - started
     if result.returncode != 0:
-        raise SystemExit(f"{label} failed with exit code {result.returncode}")
-    return time.perf_counter() - started
+        print(f"!!! {label} failed with exit code {result.returncode}", flush=True)
+        return elapsed, False
+    return elapsed, True
+
 
 
 def main() -> None:
@@ -187,7 +198,13 @@ def main() -> None:
 
     total = len(BASELINES) if "baselines" in args.stage else 0
     total += sum(len(STAGES[s]) for s in args.stage if s != "baselines")
-    print(f"\n{total} jobs in stages {args.stage}")
+    print(f"\n{total} configurations in stages {args.stage}")
+    if failed:
+        print(f"{len(failed)} job(s) failed:")
+        for label in failed:
+            print(f"  - {label}")
+        raise SystemExit(1)
+    print("all jobs completed")
 
 
 if __name__ == "__main__":
