@@ -31,7 +31,8 @@ from wm.data.generate import (  # noqa: E402
 )
 from wm.runlog import redirect_output  # noqa: E402
 from wm.data.storage import (  # noqa: E402
-    EPISODES_PER_SHARD, HEIGHT_LIMIT, HEIGHT_SCALE, SCHEMA_VERSION, ShardWriter, write_manifest,
+    EPISODES_PER_SHARD, HEIGHT_LIMIT, HEIGHT_SCALE, SCHEMA_VERSION, ShardWriter,
+    read_manifest, write_manifest,
 )
 
 
@@ -129,7 +130,14 @@ def main() -> None:
     root = Path(args.root)
     print(f"writing to {root}  ({args.workers} workers)", flush=True)
 
-    splits = {}
+    # Start from whatever the manifest already describes. Generating a subset of splits
+    # used to overwrite the manifest with only those, silently dropping every evaluation
+    # split from a dataset whose files were all still sitting on disk.
+    try:
+        splits = dict(read_manifest(root).get("splits", {}))
+    except FileNotFoundError:
+        splits = {}
+
     for name in args.splits:
         if name not in SPLITS:
             raise SystemExit(f"unknown split {name!r}; expected one of {list(SPLITS)}")
