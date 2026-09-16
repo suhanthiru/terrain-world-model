@@ -73,10 +73,21 @@ EXTRA = [
     spec(loss="l1"),                                  # reproduce the identity collapse
 ]
 
+# Short probes to pick a learning rate per architecture. Comparing a proposed model at
+# its tuned learning rate against a baseline at someone else's is the standard way to
+# make a baseline look worse than it is, so each architecture gets its own sweep and the
+# results are reported.
+LR_PROBE_EPOCHS = 6
+LR_PROBE = [
+    dict(spec(arch=arch, k_train=k), lr=lr, run_id=f"lrprobe_{arch}_K{k}_lr{lr:g}")
+    for arch, k in (("latentB", 5), ("unet", 5))
+    for lr in (1e-4, 3e-4, 1e-3)
+]
+
 # Untrained references. No training cost, and they anchor every physics metric.
 BASELINES = ["identity", "mean_terrain"]
 
-STAGES = {"core": CORE, "seeds": SEEDS, "extra": EXTRA}
+STAGES = {"lr": LR_PROBE, "core": CORE, "seeds": SEEDS, "extra": EXTRA}
 
 
 def launch(cmd: list[str], label: str, dry_run: bool) -> float:
@@ -97,6 +108,8 @@ def main() -> None:
     parser.add_argument("--skip-existing", action="store_true", default=True)
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--data-root", default="data/v1")
+    parser.add_argument("--lr", type=float, default=3e-4,
+                        help="learning rate for stages other than the probe")
     args = parser.parse_args()
 
     python = sys.executable
@@ -119,14 +132,19 @@ def main() -> None:
                        "--arch", cfg["arch"], "--latent-dim", str(cfg["latent_dim"]),
                        "--k-train", str(cfg["k_train"]), "--train-size", str(cfg["train_size"]),
                        "--seed", str(cfg["seed"]), "--loss", cfg["loss"],
+                       "--lr", str(cfg.get("lr", args.lr)),
                        "--data-root", args.data_root]
                 cmd.append("--use-action" if cfg["use_action"] else "--no-use-action")
-                if args.epochs:
-                    cmd += ["--epochs", str(args.epochs)]
+                epochs = args.epochs or (LR_PROBE_EPOCHS if stage == "lr" else None)
+                if epochs:
+                    cmd += ["--epochs", str(epochs)]
                 timings[name] = launch(cmd, f"train {name}", args.dry_run)
 
-            launch([python, "scripts/evaluate.py", "--run-id", name,
-                    "--data-root", args.data_root], f"evaluate {name}", args.dry_run)
+            # Probes are compared on dev five-step error alone; there is nothing to
+            # learn from evaluating a deliberately under-trained model on held-out splits.
+            if stage != "lr":
+                launch([python, "scripts/evaluate.py", "--run-id", name,
+                        "--data-root", args.data_root], f"evaluate {name}", args.dry_run)
 
     if timings and not args.dry_run:
         path = ROOT / "results" / "run_timings.json"
