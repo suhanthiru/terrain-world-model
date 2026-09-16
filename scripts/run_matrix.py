@@ -22,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from wm.runlog import redirect_output  # noqa: E402
 from wm.data.storage import read_manifest  # noqa: E402
 
 
@@ -241,7 +242,10 @@ def main() -> None:
                         help="learning rate for stages other than the probe")
     parser.add_argument("--jobs", type=int, default=1,
                         help="train this many runs concurrently, within the GPU budget")
+    parser.add_argument("--log-file", default=None,
+                        help="write progress here, opened by this process (see wm.runlog)")
     args = parser.parse_args()
+    redirect_output(args.log_file)
 
     if args.jobs > 1:
         print(f"training up to {args.jobs} runs at once "
@@ -296,7 +300,11 @@ def main() -> None:
         pending, trained, deferred = [], [], []
         for cfg in STAGES[stage]:
             name = cfg["run_id"]
-            if args.skip_existing and (ROOT / "runs" / name / "ckpt_best.pt").exists():
+            # summary.json is written only when fit() returns, so it marks a run that
+            # actually finished. A checkpoint is not a completion marker -- one is saved
+            # on every improving epoch, so a run killed after epoch one leaves a
+            # perfectly valid-looking ckpt_best.pt behind.
+            if args.skip_existing and (ROOT / "runs" / name / "summary.json").exists():
                 print(f"\n=== {name}: already trained, skipping ===", flush=True)
                 trained.append(name)
                 continue

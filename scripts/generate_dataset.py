@@ -29,6 +29,7 @@ from terrain.sim import CAPACITY_PER_WIDTH  # noqa: E402
 from wm.data.generate import (  # noqa: E402
     MAX_RETRIES, N_STEPS, SPLITS, SWELL, TRAIN_SIZES, _worker, assert_seed_ranges_disjoint,
 )
+from wm.runlog import redirect_output  # noqa: E402
 from wm.data.storage import (  # noqa: E402
     EPISODES_PER_SHARD, HEIGHT_LIMIT, HEIGHT_SCALE, SCHEMA_VERSION, ShardWriter, write_manifest,
 )
@@ -119,7 +120,10 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=max(1, mp.cpu_count() - 2))
     parser.add_argument("--limit", type=int, default=None,
                         help="cap episodes per split, for smoke runs")
+    parser.add_argument("--log-file", default=None,
+                        help="write progress here, opened by this process (see wm.runlog)")
     args = parser.parse_args()
+    redirect_output(args.log_file)
 
     assert_seed_ranges_disjoint()
     root = Path(args.root)
