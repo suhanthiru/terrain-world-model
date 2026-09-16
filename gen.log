@@ -1,0 +1,19 @@
+writing to data\v1  (3 workers)
+  train: train_000 already complete, skipping
+  train: train_001 already complete, skipping
+  train: train_002 already complete, skipping
+  train: train_003 already complete, skipping
+  train: train_004 already complete, skipping
+  train: train_005 already complete, skipping
+  train: train_006 already complete, skipping
+  train: train_007 already complete, skipping
+  train: train_008 already complete, skipping
+  train: train_009 already complete, skipping
+  train: train_010 already complete, skipping
+  train: train_011 already complete, skipping
+  train: train_012 already complete, skipping
+  train: train_013 already complete, skipping
+  train: 3525/6000 episodes (18.4/min, ~134.5 min left)
+  train: 3550/6000 episodes (17.1/min, ~143.3 min left)
+  train: 3575/6000 episodes (17.5/min, ~138.5 min left)
+  train: 3600/6000 episodes (17.9/min, ~134.0 min left)
